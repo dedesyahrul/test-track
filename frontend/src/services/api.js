@@ -65,6 +65,17 @@ export const importExcel = (file) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(r => r.data)
 }
+export const fetchDefectIntake = (params) => api.get('/defect-intake/', { params }).then(r => r.data)
+export const fetchDefectIntakeFilterOptions = () => api.get('/defect-intake/filter-options').then(r => r.data)
+export const fetchDefectIntakeSummary = (params) => api.get('/defect-intake/summary', { params }).then(r => r.data)
+export const exportDefectIntake = (params) => api.get('/defect-intake/export', { params, responseType: 'blob' }).then(r => {
+  const url = window.URL.createObjectURL(new Blob([r.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `Defect_Intake_Report_${new Date().toISOString().slice(0, 10)}.xlsx`
+  link.click()
+  window.URL.revokeObjectURL(url)
+})
 export const downloadTemplate = () =>
   api.get('/import/template', { responseType: 'blob' }).then(r => {
     const url = window.URL.createObjectURL(new Blob([r.data]))
@@ -175,4 +186,3 @@ export const exportTraceabilityExcel = () =>
   })
 
 export default api
-

@@ -116,6 +116,7 @@ export default function ImportPage() {
               <li>Defect ID, Scoring, Priority, Aging akan di-<strong>generate/calculate otomatis</strong> jika kosong</li>
               <li>Formula Excel (<code>=IF, =SWITCH</code>) otomatis di-handle</li>
               <li>Jika Defect ID sudah ada di database, data akan di-<strong>update</strong></li>
+              <li>Kolom <strong>Z (Fixing Status by Vendor)</strong> untuk status vendor defect</li>
               <li>Import akan <strong>sync semua tabel relasi</strong> (report_summary, defect_scoring, testers)</li>
               <li>Download template untuk melihat format lengkap</li>
             </ul>
@@ -355,31 +356,32 @@ export default function ImportPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {[
-                  ['A', 'Defect ID#', false, 'Auto-generate jika kosong'],
-                  ['B', 'Module', true, 'Nama module (dibuat otomatis jika baru)'],
-                  ['C', 'Sub-Module', true, 'Nama sub-module'],
-                  ['D', 'Summary', true, 'Ringkasan defect'],
-                  ['E', 'Stage', false, 'Default: Testing: SIT'],
-                  ['F', 'Environment', false, 'Default: Development'],
-                  ['G', 'Description', false, 'Deskripsi detail'],
-                  ['H', 'Issue Link', false, 'Link test case'],
-                  ['I', 'Impact of Issue', false, 'Dampak issue'],
-                  ['J', 'Level of Defect', true, 'Fatal / Major / Minor / Kosmetik'],
-                  ['K', 'Scoring Level', false, 'Auto dari Level (25/10/2/1)'],
-                  ['L', 'Priority', false, 'Auto dari Level'],
-                  ['M', 'Criteria', false, 'Defect / Non-Defect'],
-                  ['N', 'Status', true, 'Open / Closed / Under Review / Re-Opened / Confirmed'],
-                  ['O', 'Date Created', true, 'Format: YYYY-MM-DD'],
-                  ['P', 'Date Re-Opened', false, ''],
-                  ['Q', 'Date Closed', false, ''],
-                  ['R', 'Aging', false, 'Auto-calculate jika kosong'],
-                  ['S', 'Created by', true, 'Nama tester'],
-                  ['T', 'Last Retested by', false, ''],
-                  ['U', 'Fixing / Confirmed by', false, ''],
-                  ['V', 'Fix Date', false, ''],
-                  ['W', 'Fixing Status', false, 'Done / Fix in Progress / Needs Attention'],
-                  ['X', 'Keterangan', false, 'Catatan / log aktivitas'],
-                  ['Y', 'Retesting', false, 'Catatan retesting'],
+                   ['A', 'Defect ID#', false, 'Auto-generate jika kosong'],
+                   ['B', 'Module', true, 'Nama module (dibuat otomatis jika baru)'],
+                   ['C', 'Sub-Module', true, 'Nama sub-module'],
+                   ['D', 'Summary', true, 'Ringkasan defect'],
+                   ['E', 'Stage', false, 'Default: Testing: SIT'],
+                   ['F', 'Environment', false, 'Default: Development'],
+                   ['G', 'Description', false, 'Deskripsi detail'],
+                   ['H', 'Issue Link', false, 'Link test case'],
+                   ['I', 'Impact of Issue', false, 'Dampak issue'],
+                   ['J', 'Level of Defect', true, 'Fatal / Major / Minor / Kosmetik'],
+                   ['K', 'Scoring Level', false, 'Auto dari Level (25/10/2/1)'],
+                   ['L', 'Priority', false, 'Auto dari Level'],
+                   ['M', 'Criteria', false, 'Defect / Non-Defect'],
+                   ['N', 'Status', true, 'Open / Closed / Under Review / Re-Opened / Confirmed'],
+                   ['O', 'Date Created', true, 'Format: YYYY-MM-DD'],
+                   ['P', 'Date Re-Opened', false, ''],
+                   ['Q', 'Date Closed', false, ''],
+                   ['R', 'Aging', false, 'Auto-calculate jika kosong'],
+                   ['S', 'Created by', true, 'Nama tester'],
+                   ['T', 'Last Retested by', false, ''],
+                   ['U', 'Fixing / Confirmed by', false, ''],
+                   ['V', 'Fix Date', false, ''],
+                   ['W', 'Fixing Status', false, 'Done / Fix in Progress / Needs Attention'],
+                   ['X', 'Keterangan', false, 'Catatan / log aktivitas'],
+                   ['Y', 'Retesting', false, 'Catatan retesting'],
+                   ['Z', 'Fixing Status by Vendor', false, 'Status vendor (misal: Fixed, In Progress, Pending)'],
                 ].map(([col, name, required, desc]) => (
                   <tr key={col} className={required ? 'bg-blue-50/30' : ''}>
                     <td className="px-3 py-1.5 font-mono font-bold text-slate-600">{col}</td>

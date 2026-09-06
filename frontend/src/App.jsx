@@ -12,6 +12,7 @@ import TraceabilityPage from './pages/TraceabilityPage'
 import TestCaseManagementPage from './pages/TestCaseManagementPage'
 import SITReportPage from './pages/SITReportPage'
 import DefectClosurePage from './pages/DefectClosurePage'
+import DefectIntakePage from './pages/DefectIntakePage'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/defects" element={<DefectsPage />} />
           <Route path="/defects/:defectId" element={<DefectDetailPage />} />
           <Route path="/defect-closure" element={<DefectClosurePage />} />
+          <Route path="/defect-intake" element={<DefectIntakePage />} />
           <Route path="/test-cases-v2" element={<TestCaseManagementPage />} />
           <Route path="/test-scripts" element={<TestScriptsPage />} />
           <Route path="/traceability" element={<TraceabilityPage />} />

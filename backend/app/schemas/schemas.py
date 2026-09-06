@@ -54,6 +54,7 @@ class DefectBase(BaseModel):
     fixing_confirmed_by: Optional[str] = None
     estimated_fix_date: Optional[date] = None
     fixing_review_status: Optional[str] = None
+    fixing_status_by_vendor: Optional[str] = None
     keterangan: Optional[str] = None
     retesting: Optional[str] = None
 
@@ -68,6 +69,7 @@ class DefectUpdate(BaseModel):
     level_of_defect: Optional[str] = None
     priority: Optional[str] = None
     fixing_review_status: Optional[str] = None
+    fixing_status_by_vendor: Optional[str] = None
     date_closed: Optional[date] = None
     last_retested_by: Optional[str] = None
     fixing_confirmed_by: Optional[str] = None

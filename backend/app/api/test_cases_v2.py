@@ -388,6 +388,7 @@ async def import_test_cases_excel_v2(file: UploadFile = File(...), db: Session =
             "sheets_processed": 0,
             "sheet_names": [],
         }
+        import_executions = {}
 
         for sheet_name in wb.sheetnames:
             s_clean = sheet_name.strip().lower()
@@ -547,29 +548,33 @@ async def import_test_cases_excel_v2(file: UploadFile = File(...), db: Session =
                             results["test_steps_created"] += 1
 
                         # Create Initial TestExecution & Step Result
-                        exec_obj = db.query(TestExecution).filter(
-                            TestExecution.test_case_id == tc_obj.id,
-                            TestExecution.execution_no == 1
-                        ).first()
-
+                        exec_obj = import_executions.get(tc_obj.id)
                         if not exec_obj:
+                            latest_no = db.query(func.max(TestExecution.execution_no)).filter(
+                                TestExecution.test_case_id == tc_obj.id
+                            ).scalar() or 0
                             exec_obj = TestExecution(
                                 test_case_id=tc_obj.id,
                                 tester_name=tester,
                                 completion_testing_date=comp_date or date.today(),
-                                execution_no=1,
+                                execution_no=latest_no + 1,
                                 sheet_name=clean_str(sheet_name),
                                 import_file_name=clean_filename,
                             )
                             db.add(exec_obj)
                             db.flush()
+                            import_executions[tc_obj.id] = exec_obj
                             results["executions_created"] += 1
 
                         # Map Excel Status to standard enum (Smart N/A & Status Auto-Detection)
                         st_clean = status_raw.upper()
                         ket_clean = (keterangan or '').upper()
 
-                        if any(k in st_clean for k in ["N/A", "NOT APP", "NOT_APP"]) or ket_clean.startswith("N/A") or " N/A " in ket_clean:
+                        if st_clean == "0":
+                            norm_status = "PASS"
+                        elif st_clean == "1":
+                            norm_status = "FAIL"
+                        elif any(k in st_clean for k in ["N/A", "NOT APP", "NOT_APP"]) or ket_clean.startswith("N/A") or " N/A " in ket_clean:
                             norm_status = "N/A"
                         elif any(k in st_clean for k in ["PASS", "OK", "BERHASIL", "DONE"]):
                             norm_status = "PASS"
@@ -582,19 +587,13 @@ async def import_test_cases_excel_v2(file: UploadFile = File(...), db: Session =
                         else:
                             norm_status = "NOT_RUN"
 
-                        sr_obj = db.query(TestStepResult).filter(
-                            TestStepResult.execution_id == exec_obj.id,
-                            TestStepResult.test_step_id == step_obj.id
-                        ).first()
-
-                        if not sr_obj:
-                            sr_obj = TestStepResult(
-                                execution_id=exec_obj.id,
-                                test_step_id=step_obj.id,
-                                status=norm_status,
-                                keterangan=keterangan,
-                            )
-                            db.add(sr_obj)
+                        sr_obj = TestStepResult(
+                            execution_id=exec_obj.id,
+                            test_step_id=step_obj.id,
+                            status=norm_status,
+                            keterangan=keterangan,
+                        )
+                        db.add(sr_obj)
 
                         step_counter += 1
 
@@ -603,6 +602,8 @@ async def import_test_cases_excel_v2(file: UploadFile = File(...), db: Session =
                         results["errors"] = []
                     results["errors"].append(f"Sheet {sheet_name} Row {row_idx}: {str(row_err)}")
                     continue
+
+        db.flush()
 
         db.commit()
 

@@ -64,7 +64,11 @@ class Defect(Base):
     fixing_confirmed_by = Column(String(255))
     estimated_fix_date = Column(Date)
     fixing_review_status = Column(String(100))
+    fixing_status_by_vendor = Column(String(100))
     keterangan = Column(Text)
+    note = Column(Text)
+    import_file_name = Column(Text)
+    sheet_name = Column(Text)
     retesting = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -272,4 +276,3 @@ class TestScript(Base):
 
     module = relationship("Module", back_populates="test_scripts")
     sub_module = relationship("SubModule", back_populates="test_scripts")
-

@@ -39,6 +39,35 @@ def natural_sort_key(key_tuple):
     return (file_name, num, mod_name, ts_name)
 
 
+def get_fixing_count(db: Session, test_cases):
+    """Count completed FAIL -> PASS cycles from Test Case V2 snapshots."""
+    executions_by_round = {}
+    for test_case in test_cases:
+        executions = db.query(TestExecution).filter(
+            TestExecution.test_case_id == test_case.id
+        ).order_by(TestExecution.execution_no, TestExecution.id).all()
+        for execution in executions:
+            statuses = {
+                (result.status or "").upper()
+                for result in execution.step_results
+            }
+            round_no = execution.execution_no or execution.id
+            executions_by_round.setdefault(round_no, False)
+            executions_by_round[round_no] = executions_by_round[round_no] or bool(
+                statuses.intersection({"FAIL", "BLOCKED"})
+            )
+
+    completed_cycles = 0
+    was_failing = False
+    for round_is_failing in (
+        executions_by_round[key] for key in sorted(executions_by_round)
+    ):
+        if was_failing and not round_is_failing:
+            completed_cycles += 1
+        was_failing = round_is_failing
+    return completed_cycles
+
+
 @router.get("/cascading-filters")
 def get_cascading_filters(
     project_id: Optional[str] = None,
@@ -364,7 +393,6 @@ def get_sit_report_table(
             cnt_not_run = 0
             cnt_na = 0
             cnt_pass = 0
-            cnt_fixing = 0
 
             fail_details = []
             linked_defects = []
@@ -409,7 +437,7 @@ def get_sit_report_table(
                     elif st_status in ["N/A", "NA", "NOT APPLICABLE"]:
                         cnt_na += 1
                     elif st_status in ["IN_PROGRESS", "PROGRESS"]:
-                        cnt_fixing += 1
+                        pass
                     else:
                         cnt_not_run += 1
 
@@ -421,6 +449,7 @@ def get_sit_report_table(
                 d for d in linked_defects
                 if d.status and d.status.strip().lower() in ['open', 're-opened', 'reopen']
             ]
+            fixing_history_total = get_fixing_count(db, items)
 
             if open_linked_defects:
                 defect_ids = ", ".join([d.defect_id for d in open_linked_defects])
@@ -465,7 +494,8 @@ def get_sit_report_table(
                 "not_run": cnt_not_run,
                 "na": cnt_na,
                 "pass": cnt_pass,
-                "fixing": cnt_fixing,
+                "fixing": fixing_history_total,
+                "fixing_history_text": fixing_history_total,
                 "keterangan_temuan": keterangan_temuan,
                 "defect_id": defect_ids,
                 "severity_bug": highest_severity,
@@ -541,7 +571,6 @@ def get_sit_report_table(
         cnt_not_run = 0
         cnt_na = 0
         cnt_pass = 0
-        cnt_fixing = 0
 
         fail_details = []
         linked_defects = []
@@ -575,7 +604,7 @@ def get_sit_report_table(
             elif st.startswith("pass") or st.startswith("ok") or st.startswith("berhasil") or st.startswith("done"):
                 cnt_pass += cnt
             elif st.startswith("fix") or st.startswith("in prog") or st.startswith("proses"):
-                cnt_fixing += cnt
+                pass
             else:
                 cnt_not_run += cnt
 
@@ -618,6 +647,8 @@ def get_sit_report_table(
             latest_keterangan_str = "-"
             note_str = "-"
 
+        fixing_history_total = get_fixing_count(db, items)
+
         report_rows.append({
             "no": no_counter,
             "nama_file_import": file_name,
@@ -629,7 +660,7 @@ def get_sit_report_table(
             "not_run": cnt_not_run,
             "na": cnt_na,
             "pass": cnt_pass,
-            "fixing": cnt_fixing,
+            "fixing": fixing_history_total,
             "keterangan_temuan": keterangan_temuan,
             "defect_id": defect_ids,
             "severity_bug": highest_severity,
@@ -841,7 +872,8 @@ def export_sit_report_excel(
         row_vals = [
             item["no"], item["nama_file_import"], item["modul"], item["test_script"],
             item["total_test_script"], item["jumlah_testing"], item["fail"],
-            item["not_run"], item["na"], item["pass"], item["fixing"],
+            item["not_run"], item["na"], item["pass"],
+            item.get("fixing_history_text", item["fixing"]),
             item["keterangan_temuan"], "", item["defect_id"], item["severity_bug"],
             item["status_defect"], item["summary_defect"], item["pic_fixing"],
             item["keterangan_log_retest"], item["note"]

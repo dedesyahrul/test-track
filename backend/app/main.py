@@ -1,8 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import dashboard, defects, modules, reports, imports, test_scripts, traceability, test_cases_v2, sit_report
+from app.api import dashboard, defects, modules, reports, imports, test_scripts, traceability, test_cases_v2, sit_report, defect_intake
 from app.database import engine, Base
+from app.models.models import *  # Import all models
+from sqlalchemy import text
 import os
+
+# Create all tables
+Base.metadata.create_all(bind=engine)
+with engine.begin() as connection:
+    for column in ("note", "import_file_name", "sheet_name"):
+        connection.execute(text(f"ALTER TABLE defects ADD COLUMN IF NOT EXISTS {column} TEXT"))
 
 app = FastAPI(
     title="Dashboard SIT API",
@@ -30,6 +38,7 @@ app.include_router(imports.router, prefix="/api/import", tags=["Import/Export"])
 app.include_router(test_scripts.router, prefix="/api/test-scripts", tags=["Test Scripts"])
 app.include_router(test_cases_v2.router, prefix="/api/test-cases-v2", tags=["Test Cases Management V2"])
 app.include_router(traceability.router, prefix="/api/traceability", tags=["Traceability Matrix"])
+app.include_router(defect_intake.router, prefix="/api/defect-intake", tags=["Defect Intake"])
 
 
 @app.get("/api/health")

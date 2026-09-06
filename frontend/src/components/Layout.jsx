@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Bug, Package, FileBarChart, Menu, X, FileUp, FileCheck, Printer, Link2, ListChecks, FileText, CheckCircle2 } from 'lucide-react'
+import { LayoutDashboard, Bug, Package, FileBarChart, Menu, X, FileUp, FileCheck, Printer, Link2, ListChecks, FileText, CheckCircle2, Inbox } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
 
@@ -7,6 +7,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'SIT Report', href: '/sit-report', icon: FileText },
   { name: 'Defect List', href: '/defects', icon: Bug },
+  { name: 'Defect Intake', href: '/defect-intake', icon: Inbox },
   { name: 'Defect Closure Monitor', href: '/defect-closure', icon: CheckCircle2 },
   { name: 'Test Case V2', href: '/test-cases-v2', icon: ListChecks },
   { name: 'Test Script', href: '/test-scripts', icon: FileCheck },

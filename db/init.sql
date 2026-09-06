@@ -53,10 +53,14 @@ CREATE TABLE IF NOT EXISTS defects (
     estimated_fix_date DATE,
     fixing_review_status VARCHAR(100), -- Done, Fix in Progress, Needs Attention, Review in Progress
     keterangan TEXT,
+    note TEXT,
+    import_file_name TEXT,
+    sheet_name TEXT,
     retesting TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- Report summary table (defect/non-defect per sub-module)
 CREATE TABLE IF NOT EXISTS report_summary (

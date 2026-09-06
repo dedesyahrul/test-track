@@ -428,7 +428,7 @@ export default function SITReportPage() {
                 <th className="px-3 py-3 text-center">Not Run</th>
                 <th className="px-3 py-3 text-center">N/A</th>
                 <th className="px-3 py-3 text-center text-emerald-300">PASS</th>
-                <th className="px-3 py-3 text-center">Fixing</th>
+                <th className="px-3 py-3 text-center">Fixing (Jumlah)</th>
                 <th className="px-3 py-3 text-left max-w-xs">Keterangan Temuan</th>
                 <th className="px-3 py-3 text-center">Defect ID</th>
                 <th className="px-3 py-3 text-center">Severity Bug</th>
@@ -473,7 +473,7 @@ export default function SITReportPage() {
                     <td className={clsx('px-3 py-3 text-center font-bold rounded', row.pass > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-slate-400')}>
                       {row.pass}
                     </td>
-                    <td className="px-3 py-3 text-center font-bold text-orange-600">{row.fixing}</td>
+                    <td className="px-3 py-3 text-center font-bold text-orange-600">{row.fixing_history_text ?? row.fixing ?? 0}</td>
                     <td className="px-3 py-3 max-w-xs whitespace-pre-wrap font-mono text-[11px] text-slate-700">
                       {row.keterangan_temuan}
                     </td>

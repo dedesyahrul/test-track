@@ -21,7 +21,7 @@ HEADER_ROW = [
     "Date Created", "Date Re-Opened", "Date Closed", "Aging",
     "Created by", "Last Retested by", "Fixing / Confirmed by",
     "Estimated / Actual Fix Date", "Fixing / Review Status",
-    "Keterangan", "Retesting"
+    "Keterangan", "Retesting", "Fixing Status by Vendor"
 ]
 
 # Known header keywords that mark non-data rows
@@ -124,7 +124,7 @@ def find_data_start_row(ws) -> int:
     Returns the 1-based row number.
     """
     for row_idx in range(1, min(ws.max_row + 1, 20)):
-        row_values = [ws.cell(row=row_idx, column=c).value for c in range(1, 26)]
+        row_values = [ws.cell(row=row_idx, column=c).value for c in range(1, 27)]
 
         # Skip completely empty rows
         if all(v is None for v in row_values):
@@ -478,8 +478,8 @@ async def import_excel(file: UploadFile = File(...), db: Session = Depends(get_d
                 max_num = max(max_num, int(match.group(1)))
 
         for row_idx in range(data_start, ws.max_row + 1):
-            # Read row values (columns A-Y, 1-25)
-            row_values = [ws.cell(row=row_idx, column=c).value for c in range(1, 26)]
+            # Read row values (columns A-Z, 1-26)
+            row_values = [ws.cell(row=row_idx, column=c).value for c in range(1, 27)]
 
             # Skip if this looks like a header row that slipped through
             if is_header_row(row_values):
@@ -593,6 +593,7 @@ async def import_excel(file: UploadFile = File(...), db: Session = Depends(get_d
                 fixing_review_status = clean_cell(row_values[22])
                 keterangan = clean_cell(row_values[23])
                 retesting = clean_cell(row_values[24])
+                fixing_status_by_vendor = clean_cell(row_values[25])
 
                 # --- Upsert ---
                 existing = db.query(Defect).filter(Defect.defect_id == defect_id).first()
@@ -620,6 +621,7 @@ async def import_excel(file: UploadFile = File(...), db: Session = Depends(get_d
                     fixing_confirmed_by=fixing_confirmed_by,
                     estimated_fix_date=estimated_fix_date,
                     fixing_review_status=fixing_review_status,
+                    fixing_status_by_vendor=fixing_status_by_vendor,
                     keterangan=keterangan,
                     retesting=retesting,
                 )

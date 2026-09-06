@@ -23,6 +23,7 @@ def get_defects(
     search: Optional[str] = None,
     priority: Optional[str] = None,
     fixing_status: Optional[str] = None,
+    fixing_status_by_vendor: Optional[str] = None,
     created_by: Optional[str] = None,
     retested_by: Optional[str] = None,
     date_from: Optional[date] = None,
@@ -52,6 +53,8 @@ def get_defects(
         query = query.filter(Defect.priority == priority)
     if fixing_status:
         query = query.filter(Defect.fixing_review_status == fixing_status)
+    if fixing_status_by_vendor:
+        query = query.filter(Defect.fixing_status_by_vendor == fixing_status_by_vendor)
     if created_by:
         query = query.filter(Defect.created_by == created_by)
     if retested_by:
@@ -125,6 +128,7 @@ def get_defects(
             fixing_confirmed_by=d.fixing_confirmed_by,
             estimated_fix_date=d.estimated_fix_date,
             fixing_review_status=d.fixing_review_status,
+            fixing_status_by_vendor=d.fixing_status_by_vendor,
             keterangan=d.keterangan,
             retesting=d.retesting,
             created_at=d.created_at,
@@ -145,6 +149,10 @@ def get_filter_options(db: Session = Depends(get_db)):
     fixing_statuses = db.query(Defect.fixing_review_status).filter(
         Defect.fixing_review_status.isnot(None)
     ).distinct().order_by(Defect.fixing_review_status).all()
+
+    fixing_statuses_by_vendor = db.query(Defect.fixing_status_by_vendor).filter(
+        Defect.fixing_status_by_vendor.isnot(None)
+    ).distinct().order_by(Defect.fixing_status_by_vendor).all()
 
     creators = db.query(Defect.created_by).filter(
         Defect.created_by.isnot(None)
@@ -167,6 +175,7 @@ def get_filter_options(db: Session = Depends(get_db)):
 
     return {
         "fixing_statuses": [r[0] for r in fixing_statuses],
+        "fixing_statuses_by_vendor": [r[0] for r in fixing_statuses_by_vendor],
         "creators": [r[0] for r in creators],
         "retesters": [r[0] for r in retesters],
         "fixers": [r[0] for r in fixers],
@@ -362,6 +371,7 @@ def get_closure_monitor_table(
             fixing_confirmed_by=d.fixing_confirmed_by,
             estimated_fix_date=d.estimated_fix_date,
             fixing_review_status=d.fixing_review_status,
+            fixing_status_by_vendor=d.fixing_status_by_vendor,
             keterangan=d.keterangan,
             retesting=d.retesting,
             created_at=d.created_at,
@@ -433,35 +443,35 @@ def create_defect(defect: DefectCreate, db: Session = Depends(get_db)):
     sub_module = db.query(SubModule).filter(SubModule.id == db_defect.sub_module_id).first()
 
     return DefectResponse(
-        id=db_defect.id,
-        defect_id=db_defect.defect_id,
-        module_id=db_defect.module_id,
-        sub_module_id=db_defect.sub_module_id,
+        id=d.id,
+        defect_id=d.defect_id,
+        module_id=d.module_id,
+        sub_module_id=d.sub_module_id,
         module_name=module.name if module else None,
         sub_module_name=sub_module.name if sub_module else None,
-        summary=db_defect.summary,
-        stage=db_defect.stage,
-        environment=db_defect.environment,
-        description=db_defect.description,
-        issue_link=db_defect.issue_link,
-        level_of_defect=db_defect.level_of_defect,
-        scoring_level=db_defect.scoring_level,
-        priority=db_defect.priority,
-        defect_criteria=db_defect.defect_criteria,
-        status=db_defect.status,
-        date_created=db_defect.date_created,
-        date_reopened=db_defect.date_reopened,
-        date_closed=db_defect.date_closed,
-        aging=db_defect.aging,
-        created_by=db_defect.created_by,
-        last_retested_by=db_defect.last_retested_by,
-        fixing_confirmed_by=db_defect.fixing_confirmed_by,
-        fixing_review_status=db_defect.fixing_review_status,
-        keterangan=db_defect.keterangan,
-        retesting=db_defect.retesting,
-        created_at=db_defect.created_at,
+        summary=d.summary,
+        stage=d.stage,
+        environment=d.environment,
+        description=d.description,
+        issue_link=d.issue_link,
+        level_of_defect=d.level_of_defect,
+        scoring_level=d.scoring_level,
+        priority=d.priority,
+        defect_criteria=d.defect_criteria,
+        status=d.status,
+        date_created=d.date_created,
+        date_reopened=d.date_reopened,
+        date_closed=d.date_closed,
+        aging=d.aging,
+        created_by=d.created_by,
+        last_retested_by=d.last_retested_by,
+        fixing_confirmed_by=d.fixing_confirmed_by,
+        fixing_review_status=d.fixing_review_status,
+        fixing_status_by_vendor=d.fixing_status_by_vendor,
+        keterangan=d.keterangan,
+        retesting=d.retesting,
+        created_at=d.created_at,
     )
-
 
 @router.patch("/{defect_id}", response_model=DefectResponse)
 def update_defect(defect_id: str, update: DefectUpdate, db: Session = Depends(get_db)):
