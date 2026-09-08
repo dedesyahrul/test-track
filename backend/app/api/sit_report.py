@@ -29,6 +29,20 @@ def clean_file_name(file_name: Optional[str]) -> str:
     return re.sub(r'\.(xlsx|xls|csv)$', '', file_name.strip(), flags=re.IGNORECASE)
 
 
+def resolve_sub_module_id(db: Session, module_id: Optional[int], component: Optional[str]) -> Optional[int]:
+    """Resolve the V2 component value to the shared SubModule relation."""
+    if not module_id or not component:
+        return None
+    component_name = component.strip()
+    if not component_name:
+        return None
+    sub_module = db.query(SubModule).filter(
+        SubModule.module_id == module_id,
+        func.trim(func.lower(SubModule.name)) == component_name.lower(),
+    ).first()
+    return sub_module.id if sub_module else None
+
+
 def natural_sort_key(key_tuple):
     """
     Sort key for Natural Ascending Ordering of Test Script names (Module_1, Module_2 ... Module_10).
@@ -140,10 +154,29 @@ def calculate_report_metrics(db: Session, filters: dict) -> dict:
             try:
                 m_id = int(filters["module_id"])
                 query_tc = query_tc.filter(TestCase.module_id == m_id)
-                query_def = query_def.filter(Defect.module_id == m_id)
+                selected_mod = db.query(Module).filter(Module.id == m_id).first()
+                if selected_mod:
+                    matching_subs = db.query(SubModule).filter(func.lower(SubModule.name) == func.lower(selected_mod.name)).all()
+                    matching_sub_ids = [s.id for s in matching_subs]
+                    if matching_sub_ids:
+                        query_def = query_def.filter(or_(Defect.module_id == m_id, Defect.sub_module_id.in_(matching_sub_ids)))
+                    else:
+                        query_def = query_def.filter(Defect.module_id == m_id)
+                else:
+                    query_def = query_def.filter(Defect.module_id == m_id)
+            except: pass
+
+        if filters.get("sub_module_id") and str(filters["sub_module_id"]).strip():
+            try:
+                query_tc = query_tc.filter(TestCase.sub_module_id == int(filters["sub_module_id"]))
+                query_def = query_def.filter(Defect.sub_module_id == int(filters["sub_module_id"]))
             except: pass
 
         all_cases = query_tc.all()
+        if filters.get("sub_module_id") and str(filters["sub_module_id"]).strip():
+            try:
+                pass
+            except: pass
         total_script = sum(len(tc.test_steps) for tc in all_cases) or len(all_cases)
 
         pass_cnt = 0
@@ -357,9 +390,12 @@ def get_sit_report_table(
 
     if tc_count > 0:
         query = db.query(TestCase)
+        query_def = db.query(Defect).filter(Defect.defect_criteria == "Defect")
 
         if module_id and str(module_id).strip():
-            try: query = query.filter(TestCase.module_id == int(module_id))
+            try:
+                query = query.filter(TestCase.module_id == int(module_id))
+                query_def = query_def.filter(Defect.module_id == int(module_id))
             except: pass
         if search:
             s = f"%{search}%"
@@ -367,7 +403,7 @@ def get_sit_report_table(
 
         all_cases = query.order_by(TestCase.id.desc()).all()
 
-        # Group by (Import File, Module, Sheet/Component)
+        # Group by import file, module, and test script/sheet.
         grouped = {}
         for tc in all_cases:
             file_name = clean_file_name(tc.import_file_name)
@@ -384,6 +420,8 @@ def get_sit_report_table(
 
         # Natural sort by Module number (Module_1, Module_2 ... Module_10)
         sorted_grouped_keys = sorted(grouped.keys(), key=natural_sort_key)
+
+        seen_unlinked_defects_per_mod = {}
 
         for (file_name, mod_name, ts_name) in sorted_grouped_keys:
             items = grouped[(file_name, mod_name, ts_name)]
@@ -403,13 +441,13 @@ def get_sit_report_table(
                     TestExecution.test_case_id == tc.id
                 ).order_by(desc(TestExecution.execution_no)).first()
 
-                # Find defects for this test_case (Strict EXACT match on issue_link ONLY)
-                tc_clean = tc.test_case_id.strip().lower()
+                # Original SIT Report relation: exact Issue Link to Test Case ID.
+                tc_clean = (tc.test_case_id or "").strip().lower()
                 tc_defects = db.query(Defect).filter(
                     Defect.issue_link.isnot(None),
-                    Defect.issue_link != '',
-                    func.trim(func.lower(Defect.issue_link)) == tc_clean
-                ).all()
+                    Defect.issue_link != "",
+                    func.trim(func.lower(Defect.issue_link)) == tc_clean,
+                ).all() if tc_clean else []
 
                 for d in tc_defects:
                     if d.id not in seen_defect_ids:
@@ -444,10 +482,25 @@ def get_sit_report_table(
             jumlah_testing = total_ts - cnt_not_run
             keterangan_temuan = "\n".join(fail_details) if fail_details else "-"
 
-            # Rule: Filter ONLY defects that are OPEN or RE-OPENED (Hide Closed, Under Review, Confirmed, etc.)
+            # Fallback: Fetch defects matching the module/sub-module name if issue_link is empty
+            if mod_name not in seen_unlinked_defects_per_mod:
+                seen_unlinked_defects_per_mod[mod_name] = set()
+                
+                unlinked_defects = db.query(Defect).outerjoin(Module, Defect.module_id == Module.id).outerjoin(SubModule, Defect.sub_module_id == SubModule.id).filter(
+                    or_(Defect.issue_link == None, Defect.issue_link == ""),
+                    or_(Module.name == mod_name, SubModule.name == mod_name)
+                ).all()
+
+                for d in unlinked_defects:
+                    if d.id not in seen_defect_ids and d.id not in seen_unlinked_defects_per_mod[mod_name]:
+                        seen_unlinked_defects_per_mod[mod_name].add(d.id)
+                        seen_defect_ids.add(d.id)
+                        linked_defects.append(d)
+
+            # Original behavior: show only active defects in the report.
             open_linked_defects = [
                 d for d in linked_defects
-                if d.status and d.status.strip().lower() in ['open', 're-opened', 'reopen']
+                if d.status and d.status.strip().lower() in ["open", "re-opened", "reopen"]
             ]
             fixing_history_total = get_fixing_count(db, items)
 
@@ -487,7 +540,8 @@ def get_sit_report_table(
                 "no": no_counter,
                 "nama_file_import": file_name,
                 "modul": mod_name,
-                "test_script": ts_name,
+                "sub_module": ts_name,
+                "test_script": items[0].sheet_name if hasattr(items[0], 'sheet_name') and items[0].sheet_name else "-",
                 "total_test_script": total_ts,
                 "jumlah_testing": jumlah_testing,
                 "fail": cnt_fail,
@@ -563,6 +617,8 @@ def get_sit_report_table(
 
     sorted_grouped_keys_v1 = sorted(grouped.keys(), key=natural_sort_key)
 
+    seen_unlinked_defects_per_mod_v1 = {}
+
     for (file_name, mod_name, ts_name) in sorted_grouped_keys_v1:
         items = grouped[(file_name, mod_name, ts_name)]
         total_ts = sum((it.excel_step_count or 1) for it in items)
@@ -585,7 +641,7 @@ def get_sit_report_table(
                 # Find defects linked to item test_case_id
                 def_matches = db.query(Defect).filter(
                     Defect.issue_link.isnot(None),
-                    func.trim(func.lower(Defect.issue_link)) == func.trim(func.lower(item.test_case_id))
+                    func.trim(func.lower(Defect.issue_link)) == func.trim(func.lower(item.test_case_id)),
                 ).all()
 
                 for d in def_matches:
@@ -611,13 +667,28 @@ def get_sit_report_table(
         jumlah_testing = total_ts - cnt_not_run
         keterangan_temuan = "\n".join(fail_details) if fail_details else "-"
 
+        # Fallback: Fetch defects matching the module/sub-module name if issue_link is empty
+        if mod_name not in seen_unlinked_defects_per_mod_v1:
+            seen_unlinked_defects_per_mod_v1[mod_name] = set()
+            
+            unlinked_defects = db.query(Defect).outerjoin(Module, Defect.module_id == Module.id).outerjoin(SubModule, Defect.sub_module_id == SubModule.id).filter(
+                or_(Defect.issue_link == None, Defect.issue_link == ""),
+                or_(Module.name == mod_name, SubModule.name == mod_name)
+            ).all()
+
+            for d in unlinked_defects:
+                if d.id not in seen_defect_ids and d.id not in seen_unlinked_defects_per_mod_v1[mod_name]:
+                    seen_unlinked_defects_per_mod_v1[mod_name].add(d.id)
+                    seen_defect_ids.add(d.id)
+                    linked_defects.append(d)
+
         # Defect Aggregation
         defect_ids = ", ".join([d.defect_id for d in linked_defects]) if linked_defects else "-"
         
         # Highest Severity Calculation (Rule: Fatal > Major > Minor)
         open_linked_defects = [
             d for d in linked_defects
-            if d.status and d.status.strip().lower() in ['open', 're-opened', 'reopen']
+            if d.status and d.status.strip().lower() in ["open", "re-opened", "reopen"]
         ]
 
         if open_linked_defects:
@@ -653,7 +724,8 @@ def get_sit_report_table(
             "no": no_counter,
             "nama_file_import": file_name,
             "modul": mod_name,
-            "test_script": ts_name,
+            "sub_module": ts_name,
+            "test_script": items[0].sheet_name if hasattr(items[0], 'sheet_name') and items[0].sheet_name else "-",
             "total_test_script": total_ts,
             "jumlah_testing": jumlah_testing,
             "fail": cnt_fail,
@@ -697,10 +769,11 @@ def get_sit_report_detail(id: int, db: Session = Depends(get_db)):
     tc = db.query(TestCase).filter(TestCase.id == id).first()
     if tc:
         mod_name = tc.module.name if tc.module else "General Module"
+        tc_clean = (tc.test_case_id or "").strip().lower()
         linked_defects = db.query(Defect).filter(
             Defect.issue_link.isnot(None),
-            func.trim(func.lower(Defect.issue_link)) == func.trim(func.lower(tc.test_case_id))
-        ).all()
+            func.trim(func.lower(Defect.issue_link)) == tc_clean,
+        ).all() if tc_clean else []
 
         defect_details = [
             {
@@ -743,10 +816,11 @@ def get_sit_report_detail(id: int, db: Session = Depends(get_db)):
     ts = db.query(TestScript).filter(TestScript.id == id).first()
     if ts:
         mod_name = ts.module.name if ts.module else "General Module"
+        ts_clean = (ts.test_case_id or "").strip().lower()
         linked_defects = db.query(Defect).filter(
             Defect.issue_link.isnot(None),
-            func.trim(func.lower(Defect.issue_link)) == func.trim(func.lower(ts.test_case_id))
-        ).all()
+            func.trim(func.lower(Defect.issue_link)) == ts_clean,
+        ).all() if ts_clean else []
 
         defect_details = [
             {

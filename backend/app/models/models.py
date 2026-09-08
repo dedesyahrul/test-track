@@ -143,6 +143,7 @@ class TestCase(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), default=1)
     module_id = Column(Integer, ForeignKey("modules.id"), nullable=True)
+    sub_module_id = Column(Integer, ForeignKey("sub_modules.id"), nullable=True)
     test_case_id = Column(String(100), nullable=False)
     summary = Column(Text, nullable=False)
     prerequisite = Column(Text)
@@ -160,6 +161,7 @@ class TestCase(Base):
 
     project = relationship("Project", back_populates="test_cases")
     module = relationship("Module")
+    sub_module = relationship("SubModule")
     test_steps = relationship("TestStep", back_populates="test_case", cascade="all, delete-orphan", order_by="TestStep.step_no")
     test_executions = relationship("TestExecution", back_populates="test_case", cascade="all, delete-orphan", order_by="desc(TestExecution.execution_no)")
     defects = relationship("DefectV2", back_populates="test_case")

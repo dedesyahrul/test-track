@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, desc
 from app.database import get_db
 from app.models.models import (
-    Project, TestCase, TestStep, TestExecution, TestStepResult, DefectV2, Defect, Module, Tester
+    Project, TestCase, TestStep, TestExecution, TestStepResult, DefectV2, Defect, Module, SubModule, Tester
 )
 from app.schemas.schemas import (
     TestCaseResponse, TestCaseCreate, PaginatedTestCases,
@@ -499,9 +499,18 @@ async def import_test_cases_excel_v2(file: UploadFile = File(...), db: Session =
                                 db.flush()
                             mod_id = mod_obj.id
 
+                        sub_mod_id = None
+                        if mod_id and component:
+                            sub_mod = db.query(SubModule).filter(
+                                SubModule.module_id == mod_id,
+                                func.trim(func.lower(SubModule.name)) == component.strip().lower(),
+                            ).first()
+                            sub_mod_id = sub_mod.id if sub_mod else None
+
                         tc_obj = TestCase(
                             project_id=1,
                             module_id=mod_id,
+                            sub_module_id=sub_mod_id,
                             test_case_id=current_parent_tc_id,
                             summary=raw_summary or current_parent_tc_id,
                             prerequisite=prereq,
@@ -523,6 +532,13 @@ async def import_test_cases_excel_v2(file: UploadFile = File(...), db: Session =
                         if prereq: tc_obj.prerequisite = prereq
                         tc_obj.sheet_name = clean_str(sheet_name)
                         tc_obj.import_file_name = clean_filename
+                        if tc_obj.module_id and component and not tc_obj.sub_module_id:
+                            sub_mod = db.query(SubModule).filter(
+                                SubModule.module_id == tc_obj.module_id,
+                                func.trim(func.lower(SubModule.name)) == component.strip().lower(),
+                            ).first()
+                            if sub_mod:
+                                tc_obj.sub_module_id = sub_mod.id
                         if banner_cycle: tc_obj.cycle = banner_cycle
                         if banner_year: tc_obj.year = banner_year
                         if banner_month: tc_obj.month = banner_month

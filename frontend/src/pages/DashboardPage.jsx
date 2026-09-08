@@ -1,400 +1,67 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { fetchDashboardOverview, fetchFilterOptions, fetchModules } from '../services/api'
 import {
-  fetchOverview, fetchDefectsByLevel, fetchDefectsByModule,
-  fetchDefectsByStatus, fetchDefectTrend, fetchTesterWorkload,
-  fetchPriorityDistribution, fetchAgingDistribution, fetchFixingStatus
-} from '../services/api'
-import {
-  Bug, CheckCircle, AlertCircle, Clock, TrendingUp, Target,
-  BarChart3, Timer
+  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bug,
+  CalendarDays, CheckCircle2, Clock3, Gauge, ListChecks, RefreshCw, Target,
+  TrendingDown, TrendingUp, Users, XCircle, X
 } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line,
-  AreaChart, Area, RadialBarChart, RadialBar
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart,
+  Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis
 } from 'recharts'
 import clsx from 'clsx'
 
-const COLORS = {
-  Fatal: '#ef4444',
-  Major: '#f97316',
-  Minor: '#eab308',
-  Kosmetik: '#3b82f6',
-}
+const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#64748b']
+const INITIAL_FILTERS = { project_id: '', phase: '', module_id: '', sub_module_id: '', tester: '', severity: '', defect_status: '', fixing_status: '', date_from: '', date_to: '' }
 
-const STATUS_COLORS = {
-  Open: '#ef4444',
-  Closed: '#22c55e',
-  'Under Review': '#a855f7',
-  'Re-Opened': '#f97316',
-  Confirmed: '#6366f1',
-}
-
-const PIE_COLORS = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e', '#a855f7']
-
-function StatCard({ icon: Icon, label, value, sub, color, trend }) {
-  return (
-    <div className="stat-card">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-500">{label}</p>
-          <p className="text-3xl font-bold text-slate-900 mt-1">{value}</p>
-          {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
-        </div>
-        <div className={clsx('p-3 rounded-xl', color)}>
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-      </div>
-      {trend !== undefined && (
-        <div className="mt-3 flex items-center text-xs">
-          <TrendingUp className="w-3 h-3 mr-1 text-emerald-500" />
-          <span className="text-emerald-600 font-medium">{trend}%</span>
-          <span className="text-slate-400 ml-1">resolution rate</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CustomTooltip({ active, payload, label }) {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white px-4 py-3 rounded-lg shadow-xl border border-slate-200">
-        <p className="text-sm font-semibold text-slate-700 mb-1">{label}</p>
-        {payload.map((entry, i) => (
-          <p key={i} className="text-xs" style={{ color: entry.color }}>
-            {entry.name}: <span className="font-bold">{entry.value}</span>
-          </p>
-        ))}
-      </div>
-    )
-  }
-  return null
-}
+function Card({ children, className = '' }) { return <div className={clsx('rounded-2xl border border-slate-200 bg-white shadow-sm', className)}>{children}</div> }
+function Section({ title, subtitle, children, className = '' }) { return <Card className={className}><div className="border-b border-slate-100 px-5 py-4"><h2 className="text-sm font-bold text-slate-800">{title}</h2>{subtitle && <p className="mt-1 text-xs text-slate-400">{subtitle}</p>}</div><div className="p-5">{children}</div></Card> }
+function Delta({ value, inverse = false }) { const positive = inverse ? value <= 0 : value >= 0; return <span className={clsx('inline-flex items-center gap-1 text-xs font-semibold', positive ? 'text-emerald-600' : 'text-red-600')}>{positive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}{Math.abs(value)}% vs prior</span> }
+function Kpi({ icon: Icon, label, value, detail, color, delta, inverse }) { return <Card className="p-4"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-2 text-2xl font-black text-slate-900">{value}</p><p className="mt-1 text-xs text-slate-400">{detail}</p></div><div className={clsx('rounded-xl p-3 text-white', color)}><Icon className="h-5 w-5" /></div></div>{delta !== undefined && <div className="mt-3"><Delta value={delta} inverse={inverse} /></div>}</Card> }
+function ChartTip({ active, payload, label }) { if (!active || !payload?.length) return null; return <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xl"><p className="mb-1 text-xs font-bold text-slate-700">{label}</p>{payload.map((p, i) => <p key={i} className="text-xs" style={{ color: p.color }}>{p.name}: <b>{p.value}</b></p>)}</div> }
+function Select({ label, value, onChange, children }) { return <label className="block"><span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</span><select value={value} onChange={e => onChange(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none focus:border-blue-400 focus:bg-white">{children}</select></label> }
+function DetailTable({ title, rows, type }) { return <div><div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</h4><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">{rows.length}</span></div>{rows.length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-400">Tidak ada data.</p> : <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-100"><table className="w-full text-xs"><thead className="sticky top-0 bg-slate-50 text-left text-slate-400"><tr><th className="px-3 py-2">{type === 'execution' ? 'Test Case' : 'Defect'}</th><th className="px-3 py-2">{type === 'execution' ? 'Tester' : 'Summary'}</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Severity</th></tr></thead><tbody className="divide-y divide-slate-50">{rows.map((row, i) => <tr key={`${row.defect_id || row.test_case_id}-${i}`}><td className="px-3 py-2 font-semibold text-slate-700">{row.defect_id || row.test_case_id || '-'}</td><td className="max-w-[230px] truncate px-3 py-2 text-slate-500">{row.tester || row.summary || '-'}</td><td className="px-3 py-2"><span className={clsx('rounded-full px-2 py-1 text-[10px] font-bold', row.status === 'PASS' || row.status === 'Closed' ? 'bg-emerald-50 text-emerald-700' : row.status === 'FAIL' || row.status === 'Open' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600')}>{row.status || '-'}</span></td><td className="px-3 py-2 text-slate-500">{row.severity || row.step_results?.join(', ') || '-'}</td></tr>)}</tbody></table></div>}</div> }
+function FixingDetail({ item }) { return <div><div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">{item.status}</h4><span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">{item.count}</span></div>{item.defects?.length ? <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-100"><table className="w-full text-xs"><thead className="sticky top-0 bg-slate-50 text-left text-slate-400"><tr><th className="px-3 py-2">Defect</th><th className="px-3 py-2">Summary</th><th className="px-3 py-2">Severity</th><th className="px-3 py-2">Status</th></tr></thead><tbody className="divide-y divide-slate-50">{item.defects.map(defect => <tr key={defect.defect_id}><td className="px-3 py-2 font-semibold text-slate-700">{defect.defect_id}</td><td className="max-w-[280px] truncate px-3 py-2 text-slate-500">{defect.summary || '-'}</td><td className="px-3 py-2 text-slate-500">{defect.severity || '-'}</td><td className="px-3 py-2 text-slate-500">{defect.status || '-'}</td></tr>)}</tbody></table></div> : <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-400">Tidak ada defect pada snapshot status ini.</p>}</div> }
 
 export default function DashboardPage() {
-  const { data: overview, isLoading: loadingOverview } = useQuery({
-    queryKey: ['overview'], queryFn: fetchOverview
-  })
-  const { data: byLevel } = useQuery({
-    queryKey: ['defectsByLevel'], queryFn: fetchDefectsByLevel
-  })
-  const { data: byModule } = useQuery({
-    queryKey: ['defectsByModule'], queryFn: fetchDefectsByModule
-  })
-  const { data: byStatus } = useQuery({
-    queryKey: ['defectsByStatus'], queryFn: fetchDefectsByStatus
-  })
-  const { data: trend } = useQuery({
-    queryKey: ['defectTrend'], queryFn: fetchDefectTrend
-  })
-  const { data: workload } = useQuery({
-    queryKey: ['testerWorkload'], queryFn: fetchTesterWorkload
-  })
-  const { data: priority } = useQuery({
-    queryKey: ['priorityDist'], queryFn: fetchPriorityDistribution
-  })
-  const { data: aging } = useQuery({
-    queryKey: ['agingDist'], queryFn: fetchAgingDistribution
-  })
-  const { data: fixing } = useQuery({
-    queryKey: ['fixingStatus'], queryFn: fetchFixingStatus
-  })
+  const [filters, setFilters] = useState(INITIAL_FILTERS)
+  const [selectedDay, setSelectedDay] = useState(null)
+  const { data: modules = [] } = useQuery({ queryKey: ['modules'], queryFn: fetchModules })
+  const { data: options = {} } = useQuery({ queryKey: ['filterOptions'], queryFn: fetchFilterOptions })
+  const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: ['dashboardOverview', params], queryFn: () => fetchDashboardOverview(params), staleTime: 60_000 })
+  const setFilter = (key, value) => setFilters(current => ({ ...current, [key]: value, ...(key === 'module_id' ? { sub_module_id: '' } : {}) }))
+  const reset = () => setFilters(INITIAL_FILTERS)
+  const k = data?.kpis || {}
+  const comparison = data?.comparison || {}
+  const daily = data?.daily || []
+  const health = data?.health || {}
+  const subModules = (options.sub_modules || []).filter(s => !filters.module_id || s.module_id === Number(filters.module_id))
+  const workflow = data?.fixing_workflow || []
 
-  if (loadingOverview) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-          <p className="text-slate-500 font-medium">Loading dashboard...</p>
-        </div>
-      </div>
-    )
-  }
+  if (isLoading) return <div className="flex h-96 items-center justify-center"><RefreshCw className="h-8 w-8 animate-spin text-blue-600" /></div>
+  return <div className="space-y-5">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end"><div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.2em] text-blue-600"><Activity className="h-4 w-4" /> Executive SIT Control Room</div><h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Dashboard Overview SIT</h1><p className="mt-1 text-sm text-slate-500">Tracking, comparison, trend, dan analisis progress testing secara terpusat.</p></div><div className="flex items-center gap-2 text-xs text-slate-400"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Data {data?.filters?.date_from} s/d {data?.filters?.date_to}<button onClick={() => refetch()} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"><RefreshCw className={clsx('h-4 w-4', isFetching && 'animate-spin')} /></button></div></div>
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">SIT Overview</h1>
-          <p className="text-slate-500 mt-1">
-            {overview?.project_name || 'Procurement Management System'} &mdash; {overview?.sit_date || 'Active'}
-          </p>
-        </div>
-      </div>
+    <Card className="bg-slate-950 p-5 text-white"><div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-blue-300">SIT Health Overview</p><div className="mt-2 flex items-baseline gap-3"><span className="text-4xl font-black">{health.progress || 0}%</span><span className={clsx('rounded-full px-3 py-1 text-xs font-bold', health.status === 'ON TRACK' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300')}>{health.status || 'AT RISK'}</span></div><div className="mt-4 flex flex-wrap gap-2">{(health.notes || []).map((note, i) => <span key={i} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-slate-300">{note}</span>)}</div></div><div className="w-full max-w-sm"><div className="mb-2 flex justify-between text-xs text-slate-400"><span>SIT progress</span><span>{health.progress || 0}%</span></div><div className="h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-400" style={{ width: `${Math.min(100, health.progress || 0)}%` }} /></div><p className="mt-3 text-right text-xs text-slate-500">Updated automatically from execution and defect activity</p></div></div></Card>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={Bug}
-          label="Total Defect"
-          value={overview?.total_defects || 0}
-          sub={`${overview?.total_non_defect || 0} non-defect`}
-          color="bg-red-500"
-        />
-        <StatCard
-          icon={AlertCircle}
-          label="Open Defect"
-          value={overview?.total_open || 0}
-          sub={`${overview?.total_under_review || 0} under review`}
-          color="bg-orange-500"
-        />
-        <StatCard
-          icon={CheckCircle}
-          label="Closed Defect"
-          value={overview?.total_closed || 0}
-          color="bg-emerald-500"
-          trend={overview?.resolution_rate}
-        />
-        <StatCard
-          icon={Timer}
-          label="Avg. Aging"
-          value={`${overview?.avg_aging || 0} hari`}
-          sub={`Defect rate: ${overview?.defect_rate || 0}%`}
-          color="bg-primary-500"
-        />
-      </div>
+    <Card className="p-4"><div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-bold text-slate-800">Filter Dashboard</p><p className="text-xs text-slate-400">Semua KPI dan grafik mengikuti filter yang dipilih.</p></div><button onClick={reset} className="text-xs font-semibold text-blue-600 hover:underline">Reset filter</button></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5"> <Select label="Project" value={filters.project_id} onChange={v => setFilter('project_id', v)}><option value="">Semua project</option>{(data?.projects || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select><Select label="Phase" value={filters.phase} onChange={v => setFilter('phase', v)}><option value="">Semua phase</option><option value="SIT">SIT</option><option value="Testing: SIT">Testing: SIT</option></Select><Select label="Module" value={filters.module_id} onChange={v => setFilter('module_id', v)}><option value="">Semua module</option>{modules.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</Select><Select label="Sub Module" value={filters.sub_module_id} onChange={v => setFilter('sub_module_id', v)}><option value="">Semua sub module</option>{subModules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select><Select label="Tester" value={filters.tester} onChange={v => setFilter('tester', v)}><option value="">Semua tester</option>{(options.creators || []).map(t => <option key={t} value={t}>{t}</option>)}</Select><Select label="Severity" value={filters.severity} onChange={v => setFilter('severity', v)}><option value="">Semua severity</option>{['Fatal', 'Major', 'Minor', 'Kosmetik'].map(v => <option key={v}>{v}</option>)}</Select><Select label="Defect status" value={filters.defect_status} onChange={v => setFilter('defect_status', v)}><option value="">Semua status</option>{['Open', 'Closed', 'Under Review', 'Re-Opened', 'Confirmed'].map(v => <option key={v}>{v}</option>)}</Select><Select label="Fixing status" value={filters.fixing_status} onChange={v => setFilter('fixing_status', v)}><option value="">Semua fixing</option>{[...(options.fixing_statuses || []), ...(options.fixing_statuses_by_vendor || [])].filter((v, i, a) => a.indexOf(v) === i).map(v => <option key={v}>{v}</option>)}</Select><label><span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">From</span><input type="date" value={filters.date_from} onChange={e => setFilter('date_from', e.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" /></label><label><span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">To</span><input type="date" value={filters.date_to} onChange={e => setFilter('date_to', e.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" /></label></div></Card>
 
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Defect Trend */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-700">Defect Trend</h3>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={trend || []}>
-                <defs>
-                  <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorClosed" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(5)} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="created" name="Created" stroke="#ef4444" fill="url(#colorCreated)" strokeWidth={2} />
-                <Area type="monotone" dataKey="closed" name="Closed" stroke="#22c55e" fill="url(#colorClosed)" strokeWidth={2} />
-                <Line type="monotone" dataKey="cumulative_open" name="Cumulative Open" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6"><Kpi icon={ListChecks} label="Test Script" value={k.total_test_script || 0} detail="script terfilter" color="bg-blue-600" /><Kpi icon={Target} label="Test Case" value={k.total_test_case || 0} detail="case terdaftar" color="bg-indigo-600" /><Kpi icon={Activity} label="Execution" value={k.total_execution || 0} detail={`${k.passed || 0} passed · ${k.failed || 0} failed`} color="bg-cyan-600" /><Kpi icon={Gauge} label="SIT Progress" value={`${k.progress || 0}%`} detail={`${k.not_run || 0} belum run`} color="bg-emerald-600" delta={comparison.progress?.change} /><Kpi icon={Bug} label="Open Defect" value={k.open_defect || 0} detail={`${k.ready_to_test || 0} ready to test`} color="bg-orange-500" delta={comparison.open_defect?.change} inverse /><Kpi icon={CheckCircle2} label="Closed Defect" value={k.closed_defect || 0} detail={`${k.new_today || 0} baru · ${k.closed_today || 0} closed hari ini`} color="bg-slate-700" delta={comparison.closed_defect?.change} /></div>
 
-        {/* Defects by Module */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-700">Defects by Module</h3>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={byModule || []} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis dataKey="module" type="category" width={140} tick={{ fontSize: 10 }}
-                  tickFormatter={v => v.length > 20 ? v.slice(0, 20) + '...' : v} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="closed" name="Closed" stackId="a" fill="#22c55e" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="open" name="Open" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-3"><Section title="Daily SIT Tracking" subtitle="Execution, defect baru, closed, dan net defect per hari" className="xl:col-span-2"><ResponsiveContainer width="100%" height={310}><ComposedDaily data={daily} /></ResponsiveContainer></Section><Section title="Defect Workflow" subtitle="Distribusi status fixing vendor dan development"><div className="space-y-3">{workflow.map((item, i) => <div key={item.status}><div className="mb-1 flex justify-between text-xs"><span className="font-semibold text-slate-600">{item.status}</span><b className="text-slate-800">{item.count}</b></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${Math.min(100, (item.count / Math.max(k.total_defect || 1, 1)) * 100)}%`, backgroundColor: COLORS[i] }} /></div></div>)}</div></Section></div>
 
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Severity Distribution */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-700">Severity Distribution</h3>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={byLevel || []}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={90}
-                  dataKey="count"
-                  nameKey="level"
-                  label={({ level, count }) => `${level}: ${count}`}
-                  labelLine={false}
-                >
-                  {(byLevel || []).map((entry) => (
-                    <Cell key={entry.level} fill={COLORS[entry.level] || '#94a3b8'} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {(byLevel || []).map(l => (
-                <div key={l.level} className="flex items-center space-x-2 text-xs">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[l.level] }} />
-                  <span className="text-slate-600">{l.level}: <strong>{l.count}</strong> (Score: {l.score})</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2"><Section title="Defect Trend & Net Movement" subtitle="New vs closed dan akumulasi open defect"><ResponsiveContainer width="100%" height={280}><AreaChart data={daily}><defs><linearGradient id="openFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f97316" stopOpacity=".25" /><stop offset="100%" stopColor="#f97316" stopOpacity="0" /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} /><YAxis tick={{ fontSize: 10 }} /><Tooltip content={<ChartTip />} /><Area dataKey="open_defect" name="Open" stroke="#f97316" fill="url(#openFill)" /><Line dataKey="new_defect" name="New" stroke="#ef4444" strokeWidth={2} /><Line dataKey="closed_defect" name="Closed" stroke="#10b981" strokeWidth={2} /><Line dataKey="net_defect" name="Net" stroke="#2563eb" strokeDasharray="5 5" /></AreaChart></ResponsiveContainer></Section><Section title="Severity Analysis" subtitle="Open dan closed berdasarkan severity"><ResponsiveContainer width="100%" height={280}><BarChart data={data?.severity || []}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="severity" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip content={<ChartTip />} /><Bar dataKey="open" name="Open" fill="#ef4444" radius={[4, 4, 0, 0]} /><Bar dataKey="closed" name="Closed" fill="#10b981" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></Section></div>
 
-        {/* Status Distribution */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-700">Status Distribution</h3>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={byStatus || []}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={90}
-                  dataKey="count"
-                  nameKey="status"
-                  label={({ status, count }) => `${count}`}
-                >
-                  {(byStatus || []).map((entry, i) => (
-                    <Cell key={entry.status} fill={STATUS_COLORS[entry.status] || PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="mt-2 space-y-1.5">
-              {(byStatus || []).map((s, i) => (
-                <div key={s.status} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: STATUS_COLORS[s.status] || PIE_COLORS[i % PIE_COLORS.length] }} />
-                    <span className="text-slate-600">{s.status}</span>
-                  </div>
-                  <span className="font-bold text-slate-800">{s.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-3"><Section title="Defect Aging Analysis" subtitle="Prioritas berdasarkan umur defect"><ResponsiveContainer width="100%" height={250}><BarChart data={data?.aging || []}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="range" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip content={<ChartTip />} /><Bar dataKey="count" name="Open defect" radius={[5, 5, 0, 0]}>{(data?.aging || []).map((_, i) => <Cell key={i} fill={['#10b981', '#facc15', '#f97316', '#ef4444', '#991b1b'][i]} />)}</Bar></BarChart></ResponsiveContainer></Section><Section title="Module Analysis" subtitle="Module dengan beban defect dan test terbesar" className="xl:col-span-2"><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-slate-100 text-left text-slate-400"><th className="pb-2">Module</th><th className="pb-2 text-right">Test</th><th className="pb-2 text-right">Pass</th><th className="pb-2 text-right">Fail</th><th className="pb-2 text-right">Defect</th><th className="pb-2 text-right">Open</th><th className="pb-2 text-right">Progress</th></tr></thead><tbody>{(data?.modules || []).filter(m => m.total_test || m.total_defect).map(m => <tr key={m.module} className="border-b border-slate-50"><td className="max-w-[220px] truncate py-3 font-semibold text-slate-700">{m.module}</td><td className="py-3 text-right">{m.total_test}</td><td className="py-3 text-right text-emerald-600">{m.passed}</td><td className="py-3 text-right text-red-600">{m.failed}</td><td className="py-3 text-right font-bold">{m.total_defect}</td><td className="py-3 text-right text-orange-600">{m.open}</td><td className="py-3 text-right">{m.total_test ? Math.round(m.passed / m.total_test * 100) : 0}%</td></tr>)}</tbody></table></div></Section></div>
 
-        {/* Aging Distribution */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-700">Aging Distribution</h3>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={aging || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="range" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="count" name="Jumlah Defect" fill="#6366f1" radius={[6, 6, 0, 0]}>
-                  {(aging || []).map((entry, i) => (
-                    <Cell key={i} fill={['#22c55e', '#eab308', '#f97316', '#ef4444'][i] || '#6366f1'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-3"><Section title="Tester Performance" subtitle="Distribusi script dan defect per tester" className="xl:col-span-2"><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b border-slate-100 text-left text-slate-400"><th className="pb-2">Tester</th><th className="pb-2 text-right">Script</th><th className="pb-2 text-right">Pass</th><th className="pb-2 text-right">Fail</th><th className="pb-2 text-right">Defect found</th><th className="pb-2 text-right">Retest</th></tr></thead><tbody>{(data?.testers || []).map(t => <tr key={t.tester} className="border-b border-slate-50"><td className="py-3 font-semibold text-slate-700">{t.tester}</td><td className="py-3 text-right">{t.total_script}</td><td className="py-3 text-right text-emerald-600">{t.passed}</td><td className="py-3 text-right text-red-600">{t.failed}</td><td className="py-3 text-right">{t.defect_found}</td><td className="py-3 text-right">{t.defect_retested}</td></tr>)}</tbody></table></div></Section><Section title="Productivity & Target" subtitle="Estimasi sederhana terhadap target SIT"><div className="space-y-4">{[['Execution', data?.targets?.execution], ['Defect closure', data?.targets?.defect_closure], ['SIT progress', data?.targets?.sit_progress]].map(([label, item]) => <div key={label}><div className="mb-1 flex justify-between text-xs"><span className="font-semibold text-slate-600">{label}</span><span>{item?.actual || 0} / {item?.target || 0}</span></div><div className="h-2 rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, ((item?.actual || 0) / Math.max(item?.target || 1, 1)) * 100)}%` }} /></div></div>)}<div className="grid grid-cols-2 gap-2 pt-2">{Object.entries(data?.productivity || {}).slice(0, 4).map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase text-slate-400">{label.replaceAll('_', ' ')}</p><p className="mt-1 text-lg font-black text-slate-800">{value}</p></div>)}</div></div></Section></div>
 
-      {/* Charts Row 3 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tester Workload */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-700">Tester Workload</h3>
-          </div>
-          <div className="card-body">
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={workload || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="tester" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="created" name="Created" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="retested" name="Retested" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+    <Section title="Daily Activity Timeline" subtitle="Klik salah satu tanggal untuk melihat detail aktivitas lengkap"><div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">{[...daily].reverse().slice(0, 8).map(day => <button type="button" key={day.date} onClick={() => setSelectedDay(day)} className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/40 hover:shadow-sm"><div className="flex items-center justify-between"><p className="text-xs font-black text-blue-600">{day.date}</p><span className="text-[10px] font-semibold text-blue-500">Lihat detail</span></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs"><span><b>{day.executed}</b> executed</span><span className="text-emerald-600"><b>{day.passed}</b> passed</span><span className="text-red-600"><b>{day.failed}</b> failed</span><span className="text-orange-600"><b>{day.new_defect}</b> new defect</span><span className="text-slate-600"><b>{day.closed_defect}</b> closed</span><span className="text-indigo-600"><b>{day.net_defect}</b> net</span></div></button>)}</div></Section>
 
-        {/* Fixing Status */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-700">Fixing / Review Status</h3>
-          </div>
-          <div className="card-body">
-            <div className="space-y-3">
-              {(fixing || []).map((item, i) => {
-                const total = (fixing || []).reduce((a, b) => a + b.count, 0)
-                const pct = total > 0 ? (item.count / total * 100).toFixed(1) : 0
-                const colors = {
-                  'Done': 'bg-emerald-500',
-                  'Fix in Progress': 'bg-blue-500',
-                  'Needs Attention': 'bg-red-500',
-                  'Review in Progress': 'bg-purple-500',
-                }
-                return (
-                  <div key={item.status}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-600 font-medium">{item.status}</span>
-                      <span className="text-slate-800 font-bold">{item.count} ({pct}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2.5">
-                      <div
-                        className={clsx('h-2.5 rounded-full transition-all duration-500', colors[item.status] || 'bg-slate-400')}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Priority Distribution */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-sm font-semibold text-slate-700">Priority Distribution</h3>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {(priority || []).map((p) => {
-              const colorMap = {
-                'Highest': { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', bar: 'bg-red-500' },
-                'High': { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', bar: 'bg-orange-500' },
-                'Medium': { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', bar: 'bg-yellow-500' },
-                'Low': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', bar: 'bg-blue-500' },
-              }
-              const c = colorMap[p.priority] || colorMap['Medium']
-              return (
-                <div key={p.priority} className={clsx('rounded-xl border p-4', c.bg, c.border)}>
-                  <p className={clsx('text-xs font-medium uppercase tracking-wider', c.text)}>{p.priority}</p>
-                  <p className={clsx('text-3xl font-bold mt-1', c.text)}>{p.count}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+    {selectedDay && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onClick={() => setSelectedDay(null)}><div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}><div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-blue-600">Daily Activity Detail</p><h2 className="mt-1 text-xl font-black text-slate-900">Aktivitas SIT · {selectedDay.date}</h2><p className="mt-1 text-xs text-slate-400">Detail mengikuti filter dashboard yang sedang aktif.</p></div><button onClick={() => setSelectedDay(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button></div><div className="space-y-5 p-5"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">{[['Executed', selectedDay.executed], ['Passed', selectedDay.passed], ['Failed', selectedDay.failed], ['New defect', selectedDay.new_defect], ['Closed', selectedDay.closed_defect], ['Net defect', selectedDay.net_defect], ['Open', selectedDay.open_defect], ['Ready test', selectedDay.ready_to_test]].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase text-slate-400">{label}</p><p className="mt-1 text-xl font-black text-slate-800">{value}</p></div>)}</div><div className="grid grid-cols-1 gap-5 xl:grid-cols-2"><DetailTable title="Execution pada tanggal ini" rows={selectedDay.execution_details || []} type="execution" /><DetailTable title="Defect baru" rows={selectedDay.new_defect_details || []} type="defect" /><DetailTable title="Defect closed" rows={selectedDay.closed_defect_details || []} type="defect" /><div><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Fixing status hari ini</h4><div className="space-y-4">{(selectedDay.fixing_status_details || []).length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-400">Tidak ada data fixing status.</p> : (selectedDay.fixing_status_details || []).map(item => <FixingDetail key={item.status} item={item} />)}</div></div></div></div></div></div>}
+  </div>
 }
+
+function ComposedDaily({ data }) { return <LineChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} /><YAxis tick={{ fontSize: 10 }} /><Tooltip content={<ChartTip />} /><Line dataKey="executed" name="Executed" stroke="#2563eb" strokeWidth={2} /><Line dataKey="passed" name="Passed" stroke="#10b981" strokeWidth={2} /><Line dataKey="failed" name="Failed" stroke="#ef4444" strokeWidth={2} /><Line dataKey="new_defect" name="New defect" stroke="#f97316" strokeWidth={2} /><Line dataKey="closed_defect" name="Closed defect" stroke="#8b5cf6" strokeWidth={2} /></LineChart> }

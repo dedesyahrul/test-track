@@ -10,6 +10,7 @@ const api = axios.create({
 })
 
 // Dashboard
+export const fetchDashboardOverview = (params) => api.get('/dashboard/overview-v2', { params }).then(r => r.data)
 export const fetchOverview = () => api.get('/dashboard/overview').then(r => r.data)
 export const fetchDefectsByLevel = () => api.get('/dashboard/defects-by-level').then(r => r.data)
 export const fetchDefectsByModule = () => api.get('/dashboard/defects-by-module').then(r => r.data)

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS test_cases (
     id SERIAL PRIMARY KEY,
     project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
     module_id INTEGER REFERENCES modules(id) ON DELETE SET NULL,
+    sub_module_id INTEGER REFERENCES sub_modules(id) ON DELETE SET NULL,
     test_case_id VARCHAR(100) NOT NULL,
     summary TEXT NOT NULL,
     prerequisite TEXT,

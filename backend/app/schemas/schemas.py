@@ -228,6 +228,7 @@ class TestExecutionResponse(TestExecutionBase):
 class TestCaseBase(BaseModel):
     project_id: Optional[int] = 1
     module_id: Optional[int] = None
+    sub_module_id: Optional[int] = None
     test_case_id: str
     summary: str
     prerequisite: Optional[str] = None
@@ -375,5 +376,4 @@ class CrossCheckResult(BaseModel):
     no_test_case_id: int = 0
     integrity_ok: bool
     warnings: List[str] = []
-
 

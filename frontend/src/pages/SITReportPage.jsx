@@ -443,7 +443,7 @@ export default function SITReportPage() {
             <tbody className="divide-y divide-slate-100">
               {loadingTable ? (
                 <tr>
-                  <td colSpan={20} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={21} className="px-4 py-12 text-center text-slate-400">
                     <div className="flex items-center justify-center space-x-2">
                       <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
                       <span>Mengagregasi data report dari database...</span>
@@ -452,7 +452,7 @@ export default function SITReportPage() {
                 </tr>
               ) : (tableData?.items || []).length === 0 ? (
                 <tr>
-                  <td colSpan={20} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={21} className="px-4 py-12 text-center text-slate-400">
                     Tidak ada data SIT Report ditemukan
                   </td>
                 </tr>
@@ -462,7 +462,7 @@ export default function SITReportPage() {
                     <td className="px-3 py-3 text-center font-bold">{row.no}</td>
                     <td className="px-3 py-3 font-medium text-slate-700 whitespace-nowrap">{row.nama_file_import}</td>
                     <td className="px-3 py-3 font-semibold text-slate-800 whitespace-nowrap">{row.modul}</td>
-                    <td className="px-3 py-3 text-slate-600 whitespace-nowrap">{row.test_script}</td>
+                    <td className="px-3 py-3 font-mono text-slate-600 whitespace-nowrap">{row.test_script}</td>
                     <td className="px-3 py-3 text-center font-bold">{row.total_test_script}</td>
                     <td className="px-3 py-3 text-center font-bold text-slate-700">{row.jumlah_testing}</td>
                     <td className={clsx('px-3 py-3 text-center font-bold rounded', row.fail > 0 ? 'text-red-700 bg-red-50' : 'text-slate-400')}>
